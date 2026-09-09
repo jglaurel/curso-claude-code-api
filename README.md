@@ -38,3 +38,18 @@ curl http://localhost:8000/health
 # 8. Al terminar, apagar los servicios de Docker
 docker compose down
 ```
+
+## Migraciones de base de datos
+
+Con PostgreSQL levantado (`docker compose up -d`):
+
+```bash
+# Aplicar todas las migraciones pendientes
+uv run alembic upgrade head
+
+# Revertir la última migración aplicada
+uv run alembic downgrade -1
+
+# Revertir todas las migraciones (deja la base sin el esquema de la app)
+uv run alembic downgrade base
+```
