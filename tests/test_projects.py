@@ -140,6 +140,62 @@ def test_get_project_by_nonexistent_id_returns_404():
     assert "detail" in response.json()
 
 
+# --- PATCH /projects/{id} -----------------------------------------------
+
+
+def test_patch_project_updates_only_description_and_keeps_name():
+    client = TestClient(app)
+    created = client.post("/projects", json={"name": "Original", "description": "vieja"}).json()
+
+    response = client.patch(f"/projects/{created['id']}", json={"description": "nueva"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": created["id"], "name": "Original", "description": "nueva"}
+
+
+def test_patch_project_updates_only_name_and_keeps_description():
+    client = TestClient(app)
+    created = client.post(
+        "/projects", json={"name": "Antes", "description": "se mantiene"}
+    ).json()
+
+    response = client.patch(f"/projects/{created['id']}", json={"name": "Después"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": created["id"],
+        "name": "Después",
+        "description": "se mantiene",
+    }
+
+
+def test_patch_project_can_set_description_to_null_explicitly():
+    client = TestClient(app)
+    created = client.post("/projects", json={"name": "Con desc", "description": "algo"}).json()
+
+    response = client.patch(f"/projects/{created['id']}", json={"description": None})
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+
+def test_patch_project_on_nonexistent_id_returns_404():
+    client = TestClient(app)
+
+    response = client.patch("/projects/999999999", json={"name": "no existe"})
+
+    assert response.status_code == 404
+
+
+def test_patch_project_returns_exact_schema():
+    client = TestClient(app)
+    created = client.post("/projects", json={"name": "Esquema"}).json()
+
+    response = client.patch(f"/projects/{created['id']}", json={"description": "x"})
+
+    assert set(response.json().keys()) == {"id", "name", "description"}
+
+
 # --- Verificación cruzada contra la base (lectura, tras commit de la app) --
 
 

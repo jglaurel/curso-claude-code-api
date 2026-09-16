@@ -26,6 +26,11 @@ class ProjectCreate(BaseModel):
     description: str | None = None
 
 
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -75,6 +80,31 @@ def get_project(project_id: int) -> dict[str, object]:
     ).where(_projects_table.c.id == project_id)
     with get_engine().connect() as connection:
         row = connection.execute(query).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="proyecto no encontrado")
+    return _project_to_dict(row)
+
+
+@app.patch("/projects/{project_id}")
+def update_project(project_id: int, payload: ProjectUpdate) -> dict[str, object]:
+    updates = payload.model_dump(exclude_unset=True)
+    with get_engine().connect() as connection:
+        if updates:
+            update_stmt = (
+                sa.update(_projects_table)
+                .where(_projects_table.c.id == project_id)
+                .values(**updates)
+                .returning(
+                    _projects_table.c.id, _projects_table.c.name, _projects_table.c.description
+                )
+            )
+            row = connection.execute(update_stmt).one_or_none()
+            connection.commit()
+        else:
+            query = sa.select(
+                _projects_table.c.id, _projects_table.c.name, _projects_table.c.description
+            ).where(_projects_table.c.id == project_id)
+            row = connection.execute(query).one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="proyecto no encontrado")
     return _project_to_dict(row)
