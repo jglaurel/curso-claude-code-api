@@ -68,6 +68,20 @@ class TaskCreate(BaseModel):
         return _normalize_title(value)
 
 
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    project_id: int | None = None
+    state_id: int | None = None
+
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _normalize_title(value)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -247,6 +261,44 @@ def get_task(task_id: int) -> dict[str, object]:
     ).where(_tasks_table.c.id == task_id)
     with get_engine().connect() as connection:
         row = connection.execute(query).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="tarea no encontrada")
+    return _task_to_dict(row)
+
+
+@app.patch("/tasks/{task_id}")
+def update_task(task_id: int, payload: TaskUpdate) -> dict[str, object]:
+    updates = payload.model_dump(exclude_unset=True)
+    with get_engine().connect() as connection:
+        if "project_id" in updates and not _project_exists(connection, updates["project_id"]):
+            raise HTTPException(status_code=422, detail="el proyecto no existe")
+        if "state_id" in updates and not _state_exists(connection, updates["state_id"]):
+            raise HTTPException(status_code=422, detail="el estado no existe")
+
+        if updates:
+            update_stmt = (
+                sa.update(_tasks_table)
+                .where(_tasks_table.c.id == task_id)
+                .values(**updates)
+                .returning(
+                    _tasks_table.c.id,
+                    _tasks_table.c.title,
+                    _tasks_table.c.description,
+                    _tasks_table.c.project_id,
+                    _tasks_table.c.state_id,
+                )
+            )
+            row = connection.execute(update_stmt).one_or_none()
+            connection.commit()
+        else:
+            query = sa.select(
+                _tasks_table.c.id,
+                _tasks_table.c.title,
+                _tasks_table.c.description,
+                _tasks_table.c.project_id,
+                _tasks_table.c.state_id,
+            ).where(_tasks_table.c.id == task_id)
+            row = connection.execute(query).one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="tarea no encontrada")
     return _task_to_dict(row)

@@ -179,6 +179,101 @@ def test_delete_task_returns_204_and_removes_it():
     assert follow_up.status_code == 404
 
 
+# --- PATCH /tasks/{id} -------------------------------------------------------
+
+
+def test_patch_task_updates_only_description_and_keeps_rest():
+    client = TestClient(app)
+    project = _create_project(client, "Patch descripcion")
+    state_id = _state_id(client, "PENDIENTE")
+    created = client.post(
+        "/tasks",
+        json={
+            "title": "Original",
+            "description": "vieja",
+            "project_id": project["id"],
+            "state_id": state_id,
+        },
+    ).json()
+
+    response = client.patch(f"/tasks/{created['id']}", json={"description": "nueva"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": created["id"],
+        "title": "Original",
+        "description": "nueva",
+        "project_id": project["id"],
+        "state_id": state_id,
+    }
+
+
+def test_patch_task_with_nonexistent_project_returns_422_and_does_not_modify():
+    client = TestClient(app)
+    project = _create_project(client, "Patch proyecto invalido")
+    state_id = _state_id(client, "PENDIENTE")
+    created = client.post(
+        "/tasks", json={"title": "Intacta", "project_id": project["id"], "state_id": state_id}
+    ).json()
+
+    response = client.patch(f"/tasks/{created['id']}", json={"project_id": 999999999})
+
+    assert response.status_code == 422
+    follow_up = client.get(f"/tasks/{created['id']}").json()
+    assert follow_up["project_id"] == project["id"]
+
+
+def test_patch_task_with_nonexistent_state_returns_422_and_does_not_modify():
+    client = TestClient(app)
+    project = _create_project(client, "Patch estado invalido")
+    state_id = _state_id(client, "PENDIENTE")
+    created = client.post(
+        "/tasks", json={"title": "Intacta", "project_id": project["id"], "state_id": state_id}
+    ).json()
+
+    response = client.patch(f"/tasks/{created['id']}", json={"state_id": 999999999})
+
+    assert response.status_code == 422
+    follow_up = client.get(f"/tasks/{created['id']}").json()
+    assert follow_up["state_id"] == state_id
+
+
+def test_patch_task_with_empty_title_returns_422_and_does_not_modify():
+    client = TestClient(app)
+    project = _create_project(client, "Patch titulo vacio")
+    state_id = _state_id(client, "PENDIENTE")
+    created = client.post(
+        "/tasks", json={"title": "Intacta", "project_id": project["id"], "state_id": state_id}
+    ).json()
+
+    response = client.patch(f"/tasks/{created['id']}", json={"title": "   "})
+
+    assert response.status_code == 422
+    follow_up = client.get(f"/tasks/{created['id']}").json()
+    assert follow_up["title"] == "Intacta"
+
+
+def test_patch_task_on_nonexistent_id_returns_404():
+    client = TestClient(app)
+
+    response = client.patch("/tasks/999999999", json={"description": "no existe"})
+
+    assert response.status_code == 404
+
+
+def test_patch_task_returns_exact_schema():
+    client = TestClient(app)
+    project = _create_project(client, "Patch esquema")
+    state_id = _state_id(client, "PENDIENTE")
+    created = client.post(
+        "/tasks", json={"title": "Esquema", "project_id": project["id"], "state_id": state_id}
+    ).json()
+
+    response = client.patch(f"/tasks/{created['id']}", json={"description": "x"})
+
+    assert set(response.json().keys()) == {"id", "title", "description", "project_id", "state_id"}
+
+
 # --- GET /tasks (lista, filtros, orden) -------------------------------------
 
 
