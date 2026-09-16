@@ -20,6 +20,12 @@ _projects_table = sa.table(
     sa.column("description", sa.String),
 )
 
+_tasks_table = sa.table(
+    "tasks",
+    sa.column("id", sa.Integer),
+    sa.column("project_id", sa.Integer),
+)
+
 
 class ProjectCreate(BaseModel):
     name: str
@@ -48,6 +54,23 @@ def list_states() -> list[dict[str, object]]:
 
 def _project_to_dict(row) -> dict[str, object]:
     return {"id": row.id, "name": row.name, "description": row.description}
+
+
+def _project_has_tasks(connection, project_id: int) -> bool:
+    """Comprueba si el proyecto tiene tareas asociadas.
+
+    La tabla `tasks` todavía no existe (el recurso Tareas es de un plan
+    posterior): si la consulta falla porque la relación no existe, se trata
+    como "sin tareas" para no bloquear el borrado de proyectos mientras
+    tanto. Deuda técnica temporal — revisar este manejo cuando exista la
+    migración real de `tasks`.
+    """
+    query = sa.select(sa.exists().where(_tasks_table.c.project_id == project_id))
+    try:
+        return bool(connection.execute(query).scalar())
+    except sa.exc.ProgrammingError:
+        connection.rollback()
+        return False
 
 
 @app.post("/projects", status_code=201)
@@ -108,3 +131,17 @@ def update_project(project_id: int, payload: ProjectUpdate) -> dict[str, object]
     if row is None:
         raise HTTPException(status_code=404, detail="proyecto no encontrado")
     return _project_to_dict(row)
+
+
+@app.delete("/projects/{project_id}", status_code=204)
+def delete_project(project_id: int) -> None:
+    with get_engine().connect() as connection:
+        exists_query = sa.select(sa.exists().where(_projects_table.c.id == project_id))
+        if not connection.execute(exists_query).scalar():
+            raise HTTPException(status_code=404, detail="proyecto no encontrado")
+
+        if _project_has_tasks(connection, project_id):
+            raise HTTPException(status_code=409, detail="el proyecto tiene tareas asociadas")
+
+        connection.execute(sa.delete(_projects_table).where(_projects_table.c.id == project_id))
+        connection.commit()
