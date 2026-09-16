@@ -152,6 +152,33 @@ def test_get_task_by_nonexistent_id_returns_404():
     assert "detail" in response.json()
 
 
+# --- DELETE /tasks/{id} -----------------------------------------------------
+
+
+def test_delete_task_on_nonexistent_id_returns_404():
+    client = TestClient(app)
+
+    response = client.delete("/tasks/999999999")
+
+    assert response.status_code == 404
+
+
+def test_delete_task_returns_204_and_removes_it():
+    client = TestClient(app)
+    project = _create_project(client, "Para borrar tarea")
+    state_id = _state_id(client, "PENDIENTE")
+    created = client.post(
+        "/tasks", json={"title": "Borrame", "project_id": project["id"], "state_id": state_id}
+    ).json()
+
+    response = client.delete(f"/tasks/{created['id']}")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    follow_up = client.get(f"/tasks/{created['id']}")
+    assert follow_up.status_code == 404
+
+
 # --- GET /tasks (lista, filtros, orden) -------------------------------------
 
 

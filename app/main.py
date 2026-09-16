@@ -250,3 +250,14 @@ def get_task(task_id: int) -> dict[str, object]:
     if row is None:
         raise HTTPException(status_code=404, detail="tarea no encontrada")
     return _task_to_dict(row)
+
+
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: int) -> None:
+    with get_engine().connect() as connection:
+        exists_query = sa.select(sa.exists().where(_tasks_table.c.id == task_id))
+        if not connection.execute(exists_query).scalar():
+            raise HTTPException(status_code=404, detail="tarea no encontrada")
+
+        connection.execute(sa.delete(_tasks_table).where(_tasks_table.c.id == task_id))
+        connection.commit()
