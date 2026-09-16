@@ -23,7 +23,10 @@ _projects_table = sa.table(
 _tasks_table = sa.table(
     "tasks",
     sa.column("id", sa.Integer),
+    sa.column("title", sa.String),
+    sa.column("description", sa.String),
     sa.column("project_id", sa.Integer),
+    sa.column("state_id", sa.Integer),
 )
 
 
@@ -57,20 +60,8 @@ def _project_to_dict(row) -> dict[str, object]:
 
 
 def _project_has_tasks(connection, project_id: int) -> bool:
-    """Comprueba si el proyecto tiene tareas asociadas.
-
-    La tabla `tasks` todavía no existe (el recurso Tareas es de un plan
-    posterior): si la consulta falla porque la relación no existe, se trata
-    como "sin tareas" para no bloquear el borrado de proyectos mientras
-    tanto. Deuda técnica temporal — revisar este manejo cuando exista la
-    migración real de `tasks`.
-    """
     query = sa.select(sa.exists().where(_tasks_table.c.project_id == project_id))
-    try:
-        return bool(connection.execute(query).scalar())
-    except sa.exc.ProgrammingError:
-        connection.rollback()
-        return False
+    return bool(connection.execute(query).scalar())
 
 
 @app.post("/projects", status_code=201)
