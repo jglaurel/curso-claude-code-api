@@ -197,14 +197,6 @@ def test_patch_project_returns_exact_schema():
 
 
 # --- DELETE /projects/{id} ------------------------------------------------
-#
-# El contrato exige 409 si el proyecto tiene tareas asociadas, pero el
-# recurso Tareas (tabla `tasks`) todavía no existe — crearlo pertenece al
-# plan de Tareas, fuera de alcance de este plan (docs/plan-proyectos.md,
-# Incremento 4). La rama 409 queda sin probar por ejecución: no hay forma
-# de insertar una fila de tarea real sin esa tabla. Solo se prueban aquí
-# los dos casos que no dependen de `tasks` teniendo filas: borrado exitoso
-# de un proyecto sin tareas, y 404 sobre un id inexistente.
 
 
 def test_delete_project_on_nonexistent_id_returns_404():
@@ -225,6 +217,22 @@ def test_delete_project_without_tasks_returns_204_and_removes_it():
     assert response.content == b""
     follow_up = client.get(f"/projects/{created['id']}")
     assert follow_up.status_code == 404
+
+
+def test_delete_project_with_tasks_returns_409_and_does_not_remove_it():
+    client = TestClient(app)
+    project = client.post("/projects", json={"name": "Con tareas"}).json()
+    state_id = client.get("/states").json()[0]["id"]
+    client.post(
+        "/tasks",
+        json={"title": "Bloquea el borrado", "project_id": project["id"], "state_id": state_id},
+    )
+
+    response = client.delete(f"/projects/{project['id']}")
+
+    assert response.status_code == 409
+    follow_up = client.get(f"/projects/{project['id']}")
+    assert follow_up.status_code == 200
 
 
 # --- Verificación cruzada contra la base (lectura, tras commit de la app) --
